@@ -103,12 +103,12 @@ input[type=file]{display:none}
   <!-- ข้อมูลส่วนตัว -->
   <div class="section-title">ข้อมูลส่วนตัว</div>
   <div class="row3">
-    <div class="field"><label>ชื่อเล่น (Nick name)</label><input type="text" id="nn" placeholder="เช่น Tum"></div>
-    <div class="field"><label>ชื่อจริง (Full name)</label><input type="text" id="fn" placeholder="เช่น Nuttavuth Impaiboon"></div>
-    <div class="field"><label>แผนก / ตำแหน่ง</label><input type="text" id="dp" placeholder="เช่น SAP Academy"></div>
+    <div class="field"><label>ชื่อเล่น</label><input type="text" id="nn" placeholder="(Nick name)"></div>
+    <div class="field"><label>ชื่อจริง</label><input type="text" id="fn" placeholder="(Full name)"></div>
+    <div class="field"><label>แผนก / ตำแหน่ง</label><input type="text" id="dp" placeholder="เช่น Consult"></div>
   </div>
   <div class="row3" style="margin-top:-0.75rem">
-    <div class="field"><label>อีเมลของคุณ (@netizen.co.th)</label><input type="email" id="em" placeholder="เช่น tum@netizen.co.th"></div>
+    <div class="field"><label>อีเมลของคุณ (@netizen.co.th)</label><input type="email" id="em" placeholder="เช่น admin@netizen.co.th"></div>
   </div>
 
   <!-- พื้นหลัง -->
@@ -142,7 +142,7 @@ input[type=file]{display:none}
       <div class="cert-slot" id="s6" onclick="pick(6)"><span class="num">7</span>+</div>
       <div class="cert-slot" id="s7" onclick="pick(7)"><span class="num">8</span>+</div>
     </div>
-    <div class="hint">ตำแหน่งตามแผนผัง: 1=ขวาบน, 2=กลางขวา, 3=ล่างขวา, 4=ขวาล่างสุด, 5=ซ้ายบน(เฟรมใหญ่), 6=ซ้ายกลาง, 7=ซ้ายล่าง, 8=ซ้ายล่างสุด</div>
+    <div class="hint">ตำแหน่งตามแผนผัง: 1=ขวาบน, 2=กลางขวา, 3=ล่างขวา, 4=ขวาล่างสุด, 5=ซ้ายบน, 6=ซ้ายกลาง, 7=ซ้ายล่าง, 8=ซ้ายล่างสุด</div>
   </div>
 
   <!-- Actions -->
@@ -327,18 +327,17 @@ async function doSubmit() {
     const filename = `${bgId}_${fn.replace(/\s+/g,'_')}.png`;
 
     // Step 3: Upload to Cloudinary
-    setStatus('☁️ กำลัง upload ขึ้น Cloudinary...', '#888');
+    setStatus('☁️ กำลัง upload ไฟล์...', '#888');
     const { url, public_id } = await uploadToCloudinary(blob, filename);
 
     // Step 4: Collect cert filenames
     const certNames = certs
       .map((img, i) => img ? `Slot ${i+1}: ${img._filename || '(ไม่ระบุชื่อ)'}` : null)
       .filter(Boolean)
-      .join('
-') || '(ไม่มี cert)';
+      .join('\n') || '(ไม่มี cert)';
 
     // Step 5: Send email via EmailJS
-    setStatus('📧 กำลังส่ง email หา HR...', '#888');
+    setStatus('📧 กำลังส่ง email เพื่อตรวจสอบ...', '#888');
     await emailjs.send(SERVICE_ID, TEMPLATE_ID, {
       from_name:  fn,
       nickname:   nn,
@@ -349,7 +348,7 @@ async function doSubmit() {
       cert_list:  certNames,
     });
 
-    setStatus('✅ ส่งสำเร็จ! HR จะ reply กลับมาที่ ' + em, '#2DA46C');
+    setStatus('✅ ส่งสำเร็จ! สามารถรอรับไฟล์ได้จาก email ' + em, '#2DA46C');
     btn.textContent = '✅ ส่งแล้ว';
 
   } catch (err) {
