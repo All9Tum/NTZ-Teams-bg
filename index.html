@@ -103,9 +103,12 @@ input[type=file]{display:none}
   <!-- ข้อมูลส่วนตัว -->
   <div class="section-title">ข้อมูลส่วนตัว</div>
   <div class="row3">
-    <div class="field"><label>ชื่อเล่น</label><input type="text" id="nn" placeholder="Nick name"></div>
-    <div class="field"><label>ชื่อจริง</label><input type="text" id="fn" placeholder="Full name"></div>
-    <div class="field"><label>แผนก / ตำแหน่ง</label><input type="text" id="dp" placeholder="เช่น SAP Consult"></div>
+    <div class="field"><label>ชื่อเล่น (Nick name)</label><input type="text" id="nn" placeholder="เช่น Tum"></div>
+    <div class="field"><label>ชื่อจริง (Full name)</label><input type="text" id="fn" placeholder="เช่น Nuttavuth Impaiboon"></div>
+    <div class="field"><label>แผนก / ตำแหน่ง</label><input type="text" id="dp" placeholder="เช่น SAP Academy"></div>
+  </div>
+  <div class="row3" style="margin-top:-0.75rem">
+    <div class="field"><label>อีเมลของคุณ (@netizen.co.th)</label><input type="email" id="em" placeholder="เช่น tum@netizen.co.th"></div>
   </div>
 
   <!-- พื้นหลัง -->
@@ -145,7 +148,7 @@ input[type=file]{display:none}
   <!-- Actions -->
   <div class="btns">
     <button class="btn-p" onclick="doPreview()">▶ Preview</button>
-    <button class="btn-s" onclick="doDownload()">↓ Download PNG</button>
+    <button class="btn-s" id="submitBtn" onclick="doSubmit()">📤 Submit & Verify</button>
   </div>
   <div class="status" id="st"></div>
   <div class="preview-wrap" id="pw"><canvas id="cv"></canvas></div>
@@ -261,6 +264,104 @@ function doDownload(){
   a.download='netizen-teams-bg.png'; a.href=cv.toDataURL('image/png'); a.click();
   document.getElementById('st').textContent='✓ ดาวน์โหลดแล้ว';
 }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>
+(function(){ emailjs.init({ publicKey: "X9M8F58amSn71DXhi" }); })();
+
+const CLOUD_NAME   = "dkkzg4ai7";
+const UPLOAD_PRESET = "netizen-bg-preset";
+const SERVICE_ID   = "service_nnwo9tv";
+const TEMPLATE_ID  = "template_4u0dg3a";
+
+function setStatus(msg, color) {
+  const el = document.getElementById('st');
+  el.textContent = msg;
+  el.style.color = color || '#888';
+}
+
+async function uploadToCloudinary(blob, filename) {
+  const fd = new FormData();
+  fd.append('file', blob, filename);
+  fd.append('upload_preset', UPLOAD_PRESET);
+  fd.append('folder', 'netizen-bg');
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+    method: 'POST',
+    body: fd
+  });
+  if (!res.ok) throw new Error('Upload failed');
+  const data = await res.json();
+  return { url: data.secure_url, public_id: data.public_id };
+}
+
+async function doSubmit() {
+  const nn = document.getElementById('nn').value.trim();
+  const fn = document.getElementById('fn').value.trim();
+  const dp = document.getElementById('dp').value.trim();
+  const em = document.getElementById('em').value.trim();
+
+  // Validate
+  if (!nn || !fn || !dp || !em) {
+    setStatus('⚠️ กรุณากรอกข้อมูลให้ครบทุกช่อง', '#e55a1f'); return;
+  }
+  if (!em.endsWith('@netizen.co.th')) {
+    setStatus('⚠️ กรุณาใช้อีเมล @netizen.co.th เท่านั้น', '#e55a1f'); return;
+  }
+  if (!bgImg) {
+    setStatus('⚠️ ยังไม่มี Background image', '#e55a1f'); return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ กำลังดำเนินการ...';
+
+  try {
+    // Step 1: Render canvas
+    setStatus('🎨 กำลังสร้างไฟล์ BG...', '#888');
+    const cv = render();
+
+    // Step 2: Convert to blob
+    const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+    const bgId = 'NTZ-' + Date.now();
+    const filename = `${bgId}_${fn.replace(/\s+/g,'_')}.png`;
+
+    // Step 3: Upload to Cloudinary
+    setStatus('☁️ กำลัง upload ขึ้น Cloudinary...', '#888');
+    const { url, public_id } = await uploadToCloudinary(blob, filename);
+
+    // Step 4: Collect cert filenames
+    const certNames = certs
+      .map((img, i) => img ? `Slot ${i+1}: ${img._filename || '(ไม่ระบุชื่อ)'}` : null)
+      .filter(Boolean)
+      .join('
+') || '(ไม่มี cert)';
+
+    // Step 5: Send email via EmailJS
+    setStatus('📧 กำลังส่ง email หา HR...', '#888');
+    await emailjs.send(SERVICE_ID, TEMPLATE_ID, {
+      from_name:  fn,
+      nickname:   nn,
+      department: dp,
+      reply_to:   em,
+      bg_id:      bgId,
+      bg_url:     url,
+      cert_list:  certNames,
+    });
+
+    setStatus('✅ ส่งสำเร็จ! HR จะ reply กลับมาที่ ' + em, '#2DA46C');
+    btn.textContent = '✅ ส่งแล้ว';
+
+  } catch (err) {
+    console.error(err);
+    setStatus('❌ เกิดข้อผิดพลาด: ' + err.message, '#cc0000');
+    btn.disabled = false;
+    btn.textContent = '📤 Submit & Verify';
+  }
+}
+
+// เก็บชื่อไฟล์ไว้ใน img object ด้วย
+const _origSetCert = setCert;
 </script>
 </body>
 </html>
