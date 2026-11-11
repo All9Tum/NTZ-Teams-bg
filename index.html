@@ -86,6 +86,35 @@ h1 span{color:#FF6C2F}
 .preview-wrap{display:none;border-radius:10px;overflow:hidden;border:1.5px solid #e0ddd8;margin-top:1rem}
 .preview-wrap canvas{width:100%;display:block}
 input[type=file]{display:none}
+
+/* Background options (2 checkboxes) */
+.bg-opt{display:flex;align-items:center;gap:10px;padding:12px 14px;margin-bottom:8px;border:1.5px solid #e0ddd8;border-radius:10px;background:#fafafa;cursor:pointer;font-size:14px;transition:border-color .2s,background .2s}
+.bg-opt:hover{border-color:#bbb}
+.bg-opt.on{border-color:#FF6C2F;background:#fff9f7}
+.bg-opt input[type=checkbox]{width:18px;height:18px;accent-color:#FF6C2F;cursor:pointer;flex:none}
+.bg-opt small{color:#999;font-size:12px}
+.bg-browse{display:none;margin-left:auto;align-items:center;gap:10px}
+#bgName{font-size:12px;color:#999;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bgName.ok{color:#2DA46C}
+.btn-browse{padding:6px 14px;background:#fff;color:#555;border:1.5px solid #d8d5d0;border-radius:8px;font-size:13px;cursor:pointer;transition:border-color .2s}
+.btn-browse:hover{border-color:#FF6C2F;color:#FF6C2F}
+
+/* Clear All */
+.btn-clear{margin-left:auto;padding:10px 20px;background:#fff;color:#cc3b3b;border:1.5px solid #f0c4c4;border-radius:8px;font-size:14px;cursor:pointer;transition:background .2s,border-color .2s}
+.btn-clear:hover{background:#fff5f5;border-color:#cc3b3b}
+
+/* Popup */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:1.5rem;z-index:100}
+.modal-bg.show{display:flex}
+.modal{background:#fff;border-radius:16px;padding:1.75rem 1.5rem;max-width:360px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.modal-ico{width:48px;height:48px;border-radius:50%;background:#fff1ea;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:24px;color:#2DA46C}
+.modal-ico.done{background:#e8f6ee}
+.spin{width:22px;height:22px;border:3px solid #ffd3bf;border-top-color:#FF6C2F;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.modal-title{font-size:16px;font-weight:700;color:#222;margin-bottom:8px}
+.modal-body{font-size:14px;color:#666;line-height:1.6}
+.modal-em{font-size:13px;color:#FF6C2F;margin-top:8px;word-break:break-all}
+.modal .btn-p{margin-top:16px}
 </style>
 </head>
 <body>
@@ -114,10 +143,17 @@ input[type=file]{display:none}
   <!-- พื้นหลัง -->
   <div class="section">
     <div class="section-title">พื้นหลัง (BACKGROUND IMAGE)</div>
-    <div class="upload-box" id="bgBox" onclick="document.getElementById('bgU').click()">
-      <span style="color:#2DA46C;font-weight:600">✓ ใช้ Netizen Office Background (Default)</span><br>
-      <span style="font-size:12px;color:#aaa">คลิกเพื่อเปลี่ยนรูปพื้นหลัง</span>
-      <span id="bgName" style="display:block;font-size:12px;color:#FF6C2F;margin-top:4px"></span>
+    <div class="bg-opt on" id="bgOptDef" onclick="setBgMode('default')">
+      <input type="checkbox" id="bgDef" checked>
+      <span>Default Background <small>(Netizen Office)</small></span>
+    </div>
+    <div class="bg-opt" id="bgOptNew" onclick="setBgMode('new')">
+      <input type="checkbox" id="bgNew">
+      <span>Add new background</span>
+      <span class="bg-browse" id="bgBrowse">
+        <span id="bgName">ยังไม่ได้เลือกไฟล์</span>
+        <button type="button" class="btn-browse" onclick="event.stopPropagation();document.getElementById('bgU').click()">Browse…</button>
+      </span>
     </div>
     <input type="file" id="bgU" accept="image/*">
   </div>
@@ -149,15 +185,27 @@ input[type=file]{display:none}
   <div class="btns">
     <button class="btn-p" onclick="doPreview()">▶ Preview</button>
     <button class="btn-s" id="submitBtn" onclick="doSubmit()">📤 Submit & Verify</button>
+    <button class="btn-clear" onclick="clearAll()">🗑 Clear All</button>
   </div>
   <div class="status" id="st"></div>
   <div class="preview-wrap" id="pw"><canvas id="cv"></canvas></div>
 
 </div>
 
+<!-- Popup แจ้งเตือน -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="modal-ico" id="mIco"><span class="spin"></span></div>
+    <div class="modal-title" id="mTitle"></div>
+    <div class="modal-body" id="mBody"></div>
+    <div class="modal-em" id="mEm"></div>
+    <button class="btn-p" id="mOk" onclick="closeModal()" style="display:none">ตกลง</button>
+  </div>
+</div>
+
 <script>
 const W=1456, H=816;
-let bgImg=null, certs=new Array(8).fill(null), pickIdx=-1;
+let bgImg=null, defaultBg=null, customBg=null, bgMode='default', certs=new Array(8).fill(null), pickIdx=-1;
 
 // Slots measured from Slide3.JPG (1920x1080 → 1456x816)
 // Right col (slots 1-4): x=967, w=481
@@ -177,16 +225,29 @@ const DEFAULT_BG = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX
 
 function loadImg(src, cb) { const i=new Image(); i.onload=()=>cb(i); i.src=src; }
 
-window.onload = () => loadImg(DEFAULT_BG, i => { bgImg=i; });
+window.onload = () => loadImg(DEFAULT_BG, i => { defaultBg=i; if(bgMode==='default') bgImg=i; });
+
+function setBgMode(m){
+  bgMode=m;
+  document.getElementById('bgDef').checked = (m==='default');
+  document.getElementById('bgNew').checked = (m==='new');
+  document.getElementById('bgOptDef').classList.toggle('on', m==='default');
+  document.getElementById('bgOptNew').classList.toggle('on', m==='new');
+  document.getElementById('bgBrowse').style.display = (m==='new') ? 'flex' : 'none';
+  bgImg = (m==='default') ? defaultBg : customBg;
+}
 
 document.getElementById('bgU').addEventListener('change', e => {
   const f=e.target.files[0]; if(!f) return;
   const r=new FileReader();
   r.onload=ev=>loadImg(ev.target.result, i=>{
-    bgImg=i;
-    document.getElementById('bgName').textContent='✓ '+f.name;
+    customBg=i;
+    if(bgMode==='new') bgImg=i;
+    const n=document.getElementById('bgName');
+    n.textContent='✓ '+f.name; n.classList.add('ok');
   });
   r.readAsDataURL(f);
+  e.target.value='';
 });
 
 document.getElementById('cU').addEventListener('change', e => {
@@ -252,7 +313,32 @@ function render() {
   return cv;
 }
 
+function clearAll(){
+  if(!confirm('ล้างข้อมูลทั้งหมดบนหน้าจอใช่ไหม?')) return;
+  ['nn','fn','dp','em'].forEach(id=>{ document.getElementById(id).value=''; });
+  customBg=null;
+  const n=document.getElementById('bgName'); n.textContent='ยังไม่ได้เลือกไฟล์'; n.classList.remove('ok');
+  setBgMode('default');
+  for(let i=0;i<8;i++){ if(certs[i]!==null || document.getElementById('s'+i).classList.contains('has-img')){
+    certs[i]=null;
+    const sl=document.getElementById('s'+i);
+    sl.classList.remove('has-img');
+    sl.innerHTML=`<span class="num">${i+1}</span>+`;
+    sl.onclick=()=>pick(i);
+  } }
+  pickIdx=-1;
+  document.getElementById('pw').style.display='none';
+  const st=document.getElementById('st'); st.textContent=''; st.style.color='#999';
+  const btn=document.getElementById('submitBtn'); btn.disabled=false; btn.textContent='📤 Submit & Verify';
+  closeModal();
+}
+
 function doPreview(){
+  if(bgMode==='new' && !customBg){
+    const st=document.getElementById('st'); st.style.color='#e55a1f';
+    st.textContent='⚠️ กรุณากด Browse เพื่อเลือกภาพพื้นหลังใหม่ หรือเลือก Default Background'; return;
+  }
+  document.getElementById('st').style.color='#999';
   document.getElementById('st').textContent='กำลัง render...';
   render();
   document.getElementById('pw').style.display='block';
@@ -273,6 +359,25 @@ const CLOUD_NAME   = "dkkzg4ai7";
 const UPLOAD_PRESET = "netizen-bg-preset";
 const SERVICE_ID   = "service_nnwo9tv";
 const TEMPLATE_ID  = "template_4u0dg3a";
+
+function showModal(state, email){
+  const ico=document.getElementById('mIco');
+  if(state==='sending'){
+    ico.className='modal-ico'; ico.innerHTML='<span class="spin"></span>';
+    document.getElementById('mTitle').textContent='กำลังส่งข้อมูล…';
+    document.getElementById('mBody').textContent='กรุณารอสักครู่ และอย่าปิดหน้านี้';
+    document.getElementById('mEm').textContent='';
+    document.getElementById('mOk').style.display='none';
+  } else {
+    ico.className='modal-ico done'; ico.textContent='✓';
+    document.getElementById('mTitle').textContent='กำลังตรวจสอบข้อมูลของคุณ';
+    document.getElementById('mBody').textContent='ลิงก์ดาวน์โหลดจะถูกส่งไปที่อีเมลของคุณ เมื่อการตรวจสอบเสร็จสมบูรณ์';
+    document.getElementById('mEm').textContent=email||'';
+    document.getElementById('mOk').style.display='inline-block';
+  }
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal(){ document.getElementById('modal').classList.remove('show'); }
 
 function setStatus(msg, color) {
   const el = document.getElementById('st');
@@ -308,6 +413,9 @@ async function doSubmit() {
   if (!em.endsWith('@netizen.co.th')) {
     setStatus('⚠️ กรุณาใช้อีเมล @netizen.co.th เท่านั้น', '#e55a1f'); return;
   }
+  if (bgMode === 'new' && !customBg) {
+    setStatus('⚠️ กรุณากด Browse เพื่อเลือกภาพพื้นหลังใหม่ หรือเลือก Default Background', '#e55a1f'); return;
+  }
   if (!bgImg) {
     setStatus('⚠️ ยังไม่มี Background image', '#e55a1f'); return;
   }
@@ -315,6 +423,7 @@ async function doSubmit() {
   const btn = document.getElementById('submitBtn');
   btn.disabled = true;
   btn.textContent = '⏳ กำลังดำเนินการ...';
+  showModal('sending');
 
   try {
     // Step 1: Render canvas
@@ -350,9 +459,11 @@ async function doSubmit() {
 
     setStatus('✅ ส่งสำเร็จ! สามารถรอรับไฟล์ได้จาก email ' + em, '#2DA46C');
     btn.textContent = '✅ ส่งแล้ว';
+    showModal('done', em);
 
   } catch (err) {
     console.error(err);
+    closeModal();
     setStatus('❌ เกิดข้อผิดพลาด: ' + err.message, '#cc0000');
     btn.disabled = false;
     btn.textContent = '📤 Submit & Verify';
